@@ -7,20 +7,23 @@
 import sys
 import os
 import re
-from collections import namedtuple, defaultdict
 from pathlib import Path
-import base64
 import logging
-
+import attr
 from lxml import etree
+import base64
 
 logger = logging.getLogger(__name__)
 
-UNCHECKEDBOX = "☐"
-CHECKEDBOX = "☑"
+list_flags = dict(
+    bulleted="•",
+    numbered="[0-9]*",
+    checked="☑",
+    unchecked="☐"
+)
 
-Link = namedtuple('Link', ('label, type, url'))
-Formatted = namedtuple('Formatted', ('tag text'))
+list_pats = {k:re.compile(f'{v}') for k,v in list_flags.items()}
+
 
 from peewee import *
 
@@ -29,21 +32,33 @@ database = SqliteDatabase(None, **{})
 class UnknownField(object):
     def __init__(self, *_, **__): pass
     
+@attr.s
+class Link():
+    link = attr.ib()
+    def __attrs_post_init__(self):
+        self.text = self.link.text
+        (self.ltype, self.url) = self.link.attrib['link'].split()
+        if self.ltype  == 'file':
+            self.url = base64.b64decode(self.url).decode()
 
-#~ class CheckList():
-    #~ def __init__(self, checklist):
-        #~ self.checklist = checklist
-    #~ @property
-    #~ def todos(self):
-        #~ todos = {}
-        #~ for line in [l for c in self.node if c.tag == 'rich_text' if c.text for l in c.text.split("\n")]:
-            #~ if line.startswith(UNCHECKEDBOX):
-                #~ todos[line.strip(UNCHECKEDBOX).lstrip()] = 0
-            #~ elif line.startswith(CHECKEDBOX):
-                #~ todos[line.strip(CHECKEDBOX).lstrip()] = 1
-        #~ return todos
+@attr.s
+class RichText():
+    xml = attr.ib()
+    def __attrs_post_init__(self):
+        self.tree = etree.fromstring(self.xml)
+        self.text = ' '.join([t.text for t in self.tree.iter('rich_text') if t.text])
+        self.lines = self.text.split('\n')
+       
 
-
+    def list_items(self, ltype):
+        lpat = list_pats[ltype] 
+        for line in [l for l in self.lines if lpat.match(l)]:
+            yield line
+            
+    def links(self, ltype):
+        for link in [l for l in self.tree.findall('rich_text[@link]') if ltype in l.attrib['link']]:
+           yield Link(link)
+        
 class RichTextField(Field):
     field_type = 'TEXT'
     
@@ -51,9 +66,8 @@ class RichTextField(Field):
         return str(value) # convert object into string.
 
     def python_value(self, xml):
-        return etree.fromstring(xml) # convert to lxml object
-
-
+        return RichText(xml) # convert to lxml object
+    
 class BaseModel(Model):
     class Meta:
         database = database
@@ -161,25 +175,6 @@ class Node(BaseModel):
         for node in Node.select().join(Children, on=(Node.node == Children.node)).where(Children.father == self.parent.node).order_by(Children.sequence):
             if not node.node== self.node:
                 yield node
-                
-    @property
-    def text(self):
-        return ('\n').join([l.strip() for l in ''.join(self.txt.itertext()).split('\n') if len(l.strip()) > 0])
-        
-        
-    @property
-    def links(self):
-        for link in [l for l in self.txt.iter('rich_text') if 'link' in l.attrib]:
-            key, value = link.attrib['link'].split()
-            if key == 'file':
-                value = base64.b64decode(value).decode()
-            yield Link(link.text, key, value)
-    
-    @property
-    def formatted_text(self):
-        for line in [l for l in self.txt.iter('rich_text') if 'scale' in l.attrib]:
-            yield Formatted(line.attrib['scale'], line.text)
-
     
     @property
     def sequence(self):

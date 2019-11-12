@@ -55,7 +55,7 @@ def __attrs_post_init__(self):
 
 TextBox = namedtuple("TextBox", ('position', 'text'))
 
-def component_name(ly, bb):
+def component_name(layout, bounding_box):
     import json
     (minx, miny, maxx, maxy) = bb
     return json.dumps(dict(
@@ -80,6 +80,21 @@ def component_name(ly, bb):
         #~ return "footer"
     #~ else:
         #~ return "unknown"
+        
+'''
+['__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__iter__', '__le__', '__len__', '__lt__', '__module__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', '__weakref__', '_objs', 
+'add', 'analyze', 'bbox', 'extend', 'get_text', 'get_writing_mode', 'hdistance', 'height', 'hoverlap', 'index', 'is_empty', 'is_hoverlap', 'is_voverlap', 'set_bbox', 'vdistance', 'voverlap', 'width', 'x0', 'x1', 'y0', 'y1']
+'''
+
+@attr.s
+class TextBox():
+    layout = attr.ib()
+    tb = attr.ib()
+    
+    def __attrs_post_init__(self):
+        (self.minx, self.miny, self.maxx, self.maxy) = self.tb.bbox
+        self.text = self.tb.get_text()
+
 
 @attr.s
 class Page():
@@ -91,8 +106,7 @@ class Page():
         
     def text_boxes(self):
         for tb in [b for b in self.layout if isinstance(b, LTTextBox)]:
-            yield TextBox(component_name(self.layout, tb.bbox), tb.get_text())
-            
+            yield TextBox(self.layout, tb)
 
 def parse_pdf_document(pdf_source):
     with open(pdf_source, "rb") as infile:

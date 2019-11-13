@@ -8,10 +8,12 @@ import sys
 import os
 import re
 from pathlib import Path
+from operator import itemgetter
 import logging
 import attr
 from lxml import etree
 import base64
+from fuzzywuzzy import fuzz
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +39,13 @@ class Link():
     link = attr.ib()
     def __attrs_post_init__(self):
         self.text = self.link.text
-        (self.ltype, self.url) = self.link.attrib['link'].split()
-        if self.ltype  == 'file':
-            self.url = base64.b64decode(self.url).decode()
+        args = self.link.attrib['link'].split()
+        if args[0]  == 'file':
+            self.path = Path(base64.b64decode(args[1]).decode())
+        elif args[0] == 'node':
+            self.node = Node.get(Node.node == args[1])
+        else:
+            self.url = args[1]
 
 @attr.s
 class RichText():
@@ -154,17 +160,14 @@ class Node(BaseModel):
 
     @property
     def ancestors(self):
-        #~ print('node name', self.name)
-        ans = [self]
+        parent = self
         while True:
-            parent = ans[0].parent
-            if parent:
-                ans.insert(0, parent)
-            else:
+            try:
+                parent = parent.parent
+            except:
                 break
-        return ans
-    
-    
+            yield parent
+
     @property
     def children(self):
         for node in Node.select().join(Children, on=(Node.node == Children.node)).where(Children.father == self.node).order_by(Children.sequence):
@@ -201,10 +204,10 @@ class CherryTree():
         self.db = database
         self.db.init(filepath)
         self.db.connect()
-        try:
-            self.root_node = self.find_node(root_node)
-        except IndexError:
-            print(f'{root_node} does not exist')
+        #~ try:
+            #~ self.root_node = self.find_node_by_id(root_node)
+        #~ except IndexError:
+            #~ print(f'{root_node} does not exist')
             
     def __enter__(self):
         return self
@@ -212,16 +215,29 @@ class CherryTree():
     def __exit__(self, type, value, traceback):
         self.db.close()
 
-    def find_node(self, arg):
-        if type(arg) is int:
-            return Node.get(arg)
-        names = arg.split('/')
-        node = Node.get(Node.name == names.pop(0))
-        for name in names:
-            node = next((c for c in node.children if c.name == name), None)
-            if not node:
-                break
-        return node
+    def find_node_by_id(self, no):
+        try:
+            return Node.get(Node.node == no)
+        except Exception as e:
+            print(e)
+            return False
+
+    
+    def find_node_by_name(self, namepath):
+        names = namepath.split('/')
+        target = names.pop(-1)
+        name_length = len(names)
+        if name_length > 0:
+            qr = Node.select().where(Node.name.startswith(target[0])) 
+            path_matches = []
+            for node in qr:
+                ancestors = [a.name for n in qr for a in node.ancestors if a][:name_length]
+                score = sum([fuzz.ratio(ns, ans) for ns, ans in zip(names, reversed(ancestors))]) / name_length
+                if score > 90:
+                    path_matches.append((score, node))
+            return max(path_matches, key=itemgetter(0))[1]
+        else:
+            return Node.get(Node.name == target)
                 
     def select_nodes(self):
         for node in Node.select():

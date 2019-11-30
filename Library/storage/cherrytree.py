@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 list_flags = dict(
     bulleted="•",
-    numbered="[0-9]*",
+    numbered="[0-9]",
     checked="☑",
     unchecked="☐"
 )
@@ -54,7 +54,6 @@ class RichText():
         self.tree = etree.fromstring(self.xml)
         self.text = ' '.join([t.text for t in self.tree.iter('rich_text') if t.text])
         self.lines = self.text.split('\n')
-       
 
     def list_items(self, ltype):
         lpat = list_pats[ltype] 
@@ -160,13 +159,14 @@ class Node(BaseModel):
 
     @property
     def ancestors(self):
-        parent = self
-        while True:
-            try:
-                parent = parent.parent
-            except:
-                break
-            yield parent
+        def walk_up(parent):
+            while True:
+                try:
+                    parent = parent.parent
+                except:
+                    break
+                yield parent
+        return list(reversed([p for p in walk_up(self) if p]))
 
     @property
     def children(self):
@@ -204,10 +204,7 @@ class CherryTree():
         self.db = database
         self.db.init(filepath)
         self.db.connect()
-        #~ try:
-            #~ self.root_node = self.find_node_by_id(root_node)
-        #~ except IndexError:
-            #~ print(f'{root_node} does not exist')
+        
             
     def __enter__(self):
         return self
@@ -224,22 +221,25 @@ class CherryTree():
 
     
     def find_node_by_name(self, namepath):
+        def match_paths(node):
+            ancestors = [a.name for a in node.ancestors]
+            score = sum([fuzz.ratio(ns, ans) for ns, ans in zip(names, ancestors[-name_length:])]) / name_length
+            if score > 90:
+                return (score, node)
+            else:
+                return None
+            
         names = namepath.split('/')
         target = names.pop(-1)
         name_length = len(names)
         if name_length > 0:
-            qr = Node.select().where(Node.name.startswith(target[0])) 
-            path_matches = []
-            for node in qr:
-                ancestors = [a.name for n in qr for a in node.ancestors if a][:name_length]
-                score = sum([fuzz.ratio(ns, ans) for ns, ans in zip(names, reversed(ancestors))]) / name_length
-                if score > 90:
-                    path_matches.append((score, node))
+            qr = Node.select().where(Node.name.startswith(target[0]))
+            path_matches = filter(None, [match_paths(n) for n in qr])
             return max(path_matches, key=itemgetter(0))[1]
         else:
             return Node.get(Node.name == target)
                 
-    def select_nodes(self):
+    def all_nodes(self):
         for node in Node.select():
                 yield node
     

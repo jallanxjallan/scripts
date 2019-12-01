@@ -1,4 +1,4 @@
-#!/home/jeremy/Scripts/Python3.6Env/bin/python
+#!/home/jeremy/Python3.6Env/bin/python
 # -*- coding: utf-8 -*-
 #
 #  module.py
@@ -13,12 +13,12 @@ from pathlib import Path
 
 sys.path.append('/home/jeremy/Scripts/Library')
 
-from document.text_document import text_to_file
+from document import Document
 
 
-def main(name, filepath):
-    Path(filepath).write_text(f'Hello World from {name}')
-    print('finished')
+def main():
+    doc = Document('hello world')
+    print(doc)
 
 
 if __name__ == '__main__':

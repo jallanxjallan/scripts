@@ -15,22 +15,8 @@ import dataset
 
 
 
-def set_config_file():
-    pass
-    
-def get_repo():
-    try:
-        repo = Repo(Path.cwd())
-    except InvalidGitRepositoryError:
-        print('project not initialized')
-        return False
-    
-    return repo
-    
 
 
-
-    
 
 
 def main(source):

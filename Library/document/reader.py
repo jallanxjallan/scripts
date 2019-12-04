@@ -11,10 +11,12 @@ import attr
 from pathlib import Path
 
 from document import Document
-from document import parse_pdf_document
+from document.pdf_document import parse_pdf_document
 
 import logging
 logger = logging.getLogger(__name__)
+
+MARKDOWN = 'markdown_mmd'
 
 
 def read_file(filepath):
@@ -26,7 +28,7 @@ def read_file(filepath):
         
         
 def read_text(text):
-     try:
+    try:
         return pypandoc.convert_text(str(filepath), MARKDOWN)
     except FileNotFoundError:
         logger.info(f'unable to import {filepath}')
@@ -52,17 +54,25 @@ def document_reader(source):
     if source.isdir():
         for filepath in source.iterdir():
             doc = Document(read_file(filepath))
-            doc.meta.sourcefile = filepath
+            #~ doc.meta[DOCUMENT_SOURCE]= filepath
             yield doc
     elif source.suffix == 'zip':
-        for zip_obj in read_zipfile(source):
-            yield zip_obj, zip_obj.name
+        pass
+        #~ for zip_obj in read_zipfile(source):
+            #~ doc = Document(read_text(zip_obj))
+            #~ doc.meta[DOCUMENT_SOURCE]= zip_obj.name
+            #~ yield doc
     elif source.suffix == 'pdf':
-        for page in parse_pdf_document(source):
-            for text_box in page.text_boxes():
-                yield (text_box.text, page.no)
+        pass
+        #~ for page in parse_pdf_document(source):
+            #~ for text_box in page.text_boxes():
+                #~ doc = Document(read_text(zip_obj))
+                #~ doc.meta[DOCUMENT_SOURCE]= source
+                #~ doc.meta[PAGENO]= page.pageno
+                #~ doc.meta[COMPONENT]= text_box.component
+                #~ yield doc
     else:
-        yield read_file(source) str(source)
+        yield Document(read_file(source))
 return True
     
     

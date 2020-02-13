@@ -1,2 +1,0 @@
-Rule based entity matchine
-https://spacy.io/usage/rule-based-matching#entityruler

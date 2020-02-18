@@ -10,30 +10,56 @@ import os
 import plac
 from pathlib import Path
 import yaml
+import pandas as pd
 
 sys.path.append('/home/jeremy/Library')
 
 from storage.cherrytree_xml import CherryTree
+from document.convert_document import convert_text
+from utility.helpers import snake_case
 
-def main(source_index, outputfile, anchor_base, link_base='Scenes'):
-    ct = CherryTree(source_index)
-    if anchor_base:
-        anchor_base_node = ct.find_node_by_name(anchor_base)
-    else:
-        anchor_base_node = ct.root
-    link_base_node = ct.find_node_by_name(link_base)
+def main(config_path):
+    def category_nodes(names):
+        for name in names:
+            node = ct.find_node_by_name(name)
+            if node:
+                yield node
+            else:
+                raise f'category {name} not found'
 
+    def make_output_item(name):
+        anc = next((a for a in anchors if a.name == name), None)
+        if anc:
+            return (anc.node.name, anc.name)
+        return None
 
-    anchors = [a for n in anchor_base_node.descendants for a in n.anchors]
+    def find_unlinked_anchors(anchors):
+        for node in set((a.name for a in anchors)).difference(set((l.node_anchor for l in links))):
+            yield node
 
-    links = [l for n in link_base_node.descendants for l in n.links if l.node_anchor]
+    cpath = Path(config_path)
+    if not cpath.exists():
+        print('no config found')
+        exit()
+    config = yaml.load(cpath.read_text())
 
-    with open(outputfile, 'w') as outfile:
-        print(f'{anchor_base} anchors  not linked to {link_base}', file=outfile)
-        for name in set((a.name for a in anchors)).difference(set((l.node_anchor for l in links))):
-            anc = next((a for a in anchors if a.name == name), None)
-            print(f'Node: {anc.node.name} - Anchor: {anc.name}', file=outfile)
+    ct = CherryTree(config['source_index'])
 
+    link_target_node = ct.find_node_by_name(config['target_name'])
+    if not link_target_node:
+        raise f'target node {target_name} not found'
+
+    anchor_links = [l.node_anchor for n in link_target_node.descendants for l in n.links if l.node_anchor]
+
+    unlinked_anchors = [(n.name, a.name) \
+                        for c in category_nodes(config['categories']) \
+                        for n in c.descendants \
+                        for a in n.anchors \
+                        if not a.name in anchor_links]
+
+    df = pd.DataFrame(unlinked_anchors, columns=['Node', 'Anchor'])
+
+    convert_text(df.sort_values('Node').to_html(), config['node_report_file'])
     print('finished')
 
 

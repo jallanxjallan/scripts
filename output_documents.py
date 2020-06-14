@@ -15,7 +15,7 @@ import pandas as pd
 sys.path.append('/home/jeremy/Library')
 
 from storage.cherrytree_xml import CherryTree
-from document.convert_document import convert_text
+from document.convert_document import convert_file
 from utility.helpers import snake_case
 
 filter_path = Path('/home/jeremy/Library/document/filters')
@@ -36,13 +36,11 @@ def main(config_path):
         exit()
 
     output_args = config['output_args']
-    output_args['input-files'].extend(
-            [str(l.filepath)
+    for filepath in [str(l.filepath)
              for n in link_target_node.descendants
-             for l in n.links if l.filepath ])
-    output_args['filters'] = [str(filter_path.joinpath(f).with_suffix('.py')) for f in output_args['filters']]
-    with open('output_config.yaml', 'w') as outfile:
-        yaml.dump(output_args, outfile)
+             for l in n.links if l.filepath ]:
+        convert_file(filepath, **output_args)
+
     print('finished')
 
 

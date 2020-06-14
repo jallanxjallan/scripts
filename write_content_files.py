@@ -17,7 +17,7 @@ sys.path.append('/home/jeremy/Library')
 from storage.cherrytree_xml import CherryTree
 from utility.config import load_config
 
-def main(config, output='csv'):
+def main(config):
     """Match files in target directory with nodes containing file link
     config fields: content_index, content_base_name, content_file_dir
     output: html or csv
@@ -43,31 +43,12 @@ def main(config, output='csv'):
         print(f' {content_base_name} not in index')
         exit()
 
-    file_links = set([l.filepath.stem \
-                    for n in content_base_node.descendants \
-                    for l in n.links \
-                    if l.filepath
-                    if cfd in str(l.filepath)
-                    ])
-
-    file_paths = set([f.stem \
-        for f in Path(cfd).iterdir() \
-        if f.suffix == '.md'])
-
-    unmatched = [(f, None) for f in file_paths.difference(file_links)]
-    unmatched.extend([(None, l) for l in file_links.difference(file_paths)])
+    for node in content_base_node.descendants:
+        for item in node.text:
+            print(item)
 
 
-    df = pd.DataFrame(unmatched, columns=['File', 'Link']).drop_duplicates().sort_values(['Link', 'File'])
 
-
-    if output == 'csv':
-        print(df.to_csv(sep=' ', index=False, header=False))
-
-    elif output == 'html':
-        print(df.to_html())
-    else:
-        print(f'unknown format {output}')
 
 
 if __name__ == '__main__':

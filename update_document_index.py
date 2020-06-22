@@ -10,10 +10,11 @@ import os
 import re
 from pathlib import Path
 import datetime
+from uuid import uuid4
 import attr
 import fire
 import inflect
-
+import pypandoc
 sys.path.append('/home/jeremy/Library')
 
 from storage.cherrytree_xml import CherryTree
@@ -26,12 +27,16 @@ class Document():
     filepath = attr.ib()
 
 class DocumentIndex():
-    def __init__(self, index_file='document_index.ctd'):
+    def __init__(self, index_file=None, base_node=None):
+        print('index', index_file)
+        self.index_file = index_file
+        self.base_node = base_node
         try:
             self.ct = CherryTree(index_file)
         except Exception as e:
             print(e)
             raise
+
 
     def documents(self, base=None):
         for node in self.ct.nodes(base):
@@ -55,42 +60,48 @@ class DocumentIndex():
     #     else:
     #         node.insert_codebox(content=dump_yaml(content), language='yaml')
 
-
-    def add_document(self, filepath):
-        try:
-            document = read_file(filepath)
-        except FileNotFoundError:
-            print(filepath, 'not found')
-            return False
-
-        if self.ct.find_node_by_text(document.identifier):
-            print(filepath, 'already indexed')
-            return True
-        new_items = self.ct.find_node_by_name('New Items') \
-            or self.ct.insert_node('New Items')
-        node = self.ct.insert_node(document.title, target=new_items)
-        anchor = node.insert_anchor(name=document.identifier)
-        link = node.insert_link(href=filepath, text="File", target=anchor)
-        new_line = node.insert_text('\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n')
-        return filepath
-
-    def add_from_filelist(self, filelist):
-        fp = Path(filelist)
-        if not fp.exists():
-            return fp, 'Not Found'
-        added = []
-        for filepath in [Path(f) for f in fp.read_text().split("\n")]:
-            added.append(self.add_document(filepath))
-        self.save_index(added)
-
     def save_index(self, added):
         indexed_files = [f for f in added if not f is None]
         if len(indexed_files) == 0:
             return 'No Documents Indexed'
         self.ct.save()
         for filename in indexed_files:
-            print(f'stored {str(filename)} to self.document_index')
+            print(f'stored {str(filename)} to {self.index_file}')
         return True
+
+    def add_document(self, fp):
+
+        if not fp.exists():
+            return False
+        elif not fp.is_file():
+            return False
+        elif not fp.suffix == '.md':
+            return False
+
+        document = read_file(str(fp))
+        if not document:
+            return False
+        print(document.title, document.identifier)
+
+        if self.ct.find_node_by_text(document.identifier):
+            print(filepath, 'already indexed')
+            return True
+        base_node = self.ct.find_node_by_name(self.base_node) \
+            or self.ct.insert_node(self.base_node)
+        title = document.title or re.sub('\-|\_', ' ', fp.stem).title()
+        node = self.ct.insert_node(title, parent=base_node)
+        anchor = node.insert_anchor(name=document.identifier)
+        link = node.insert_link(href=str(fp), text="File", sibling=anchor)
+        new_line = node.insert_text('\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n')
+        return fp
+
+    def add_from_filelist(self, filelist):
+        fp = Path(filelist)
+        added = []
+        for filepath in [Path(f) for f in fp.read_text().split("\n")]:
+            added.append(self.add_document(filepath))
+        self.save_index(added)
+
 
     def add_from_filename(self, filepath):
         rs = self.add_document(filepath)
@@ -100,159 +111,63 @@ class DocumentIndex():
 
     def add_from_stream(self):
         added = []
-        for filepath in [s.strip() for s in sys.stdin.readlines()]:
-            added.append(self.add_document(filepath))
+        for filepath in sys.stdin.readlines():
+            fp = Path(filepath.strip())
+            added.append(self.add_document(fp))
         self.save_index(added)
         return True
 
+    def add_file_link(self):
+        node_name = input('Node Name: ')
+        node = self.ct.find_node_by_name(node_name)
+
+        if not node:
+            return f'Cannot find node {node_name}'
+
+        filepath = input('Filepath: ')
+        fp = Path(filepath)
+        if not fp.exists():
+            return (f'{str(filepath)} does not exist')
+        document = read_file(filepath)
+        identifier = document.identifier
+        if not identifier:
+            return f'document {filepath} has no identifier'
+        anchor = node.insert_anchor(identifier)
+        node.insert_link(href=filepath, text="Content")
+        self.ct.save()
+        return f'Link to {filepath} added to {node.name}'
+
+
+    def export_to_file(self, node_name, target_dir):
+        target_path = Path(target_dir)
+        node = self.ct.find_node_by_name(node_name)
+
+        if not node:
+            return f'Cannot find node {node_name}'
+
+        identifier = uuid4().hex[:8]
+        outputfile = target_path.joinpath(node_name.replace(' ', '_').lower()).with_suffix('.md')
+        if outputfile.exists():
+            print(f'{str(outputfile)} already exists')
+        outputfile=str(outputfile)
+        content = "\n".join([t for t in node.texts if len(t) > 0])
+        try:
+            pypandoc.convert_text(content,
+                              'markdown',
+                              format='markdown',
+                              outputfile=outputfile,
+                              extra_args=[
+                                  f'--metadata=identifier:{identifier}',
+                                  f'--metadata=title:{node.name}',
+                                  '--defaults=create_document'
+                              ])
+        except Exception as e:
+            return e
+        [e.getparent().remove(e) for e in node.element.iterchildren('rich_text')]
+        anchor = node.insert_anchor(identifier)
+        node.insert_link(href=outputfile, text="Content")
+        self.ct.save()
+        return f'Notes from {node.name} written to {outputfile}'
 
 if __name__ == '__main__':
     fire.Fire(DocumentIndex)
-
-# @property
-#     def text_filepath(self):
-#         filepath = None
-#         codebox = self.codebox
-#         if codebox and hasattr(codebox, 'filepath'):
-#             filepath = codebox.filepath
-#         else:
-#             filepath = next((l.filepath for l in self.links if l.filepath), None)
-#         return filepath
-#
-# def __attrs_post_init__(self):
-#         yaml = YAML()
-#         if len(self.data) > 0:
-#             if type(self.data) is str:
-#                 self.data = yaml.load(self.data)
-#         else:
-#             self.data = yaml.load(self.codebox.text)
-#
-#     def __str__(self):
-#
-#         stream = StringIO()
-#         yaml.dump(self.codebox.text, stream)
-#         stream.seek(0)
-#         return stream.read()
-#
-#     def __getattr__(self, att):
-#         return self.codebox.get(att, None)
-# yaml=YAML()
-# p = inflect.engine()
-# # nlp = spacy.load('en_core_web_sm')
-#
-
-
-
-    # ct = CherryTree(index_file)
-
-
-    #     print('===========')
-        # node = ct.find_node_by_text(document.identifier)
-        # file_link = Link(None, document.filepath, 'Text')
-        # metadata = CodeBox(None, document.metadata)
-        # if node:
-        #     node
-        #
-        #     node = Node(None, links=file_link, codeboxes=metadata)
-        # try:
-        #     node_data = YAMLDocument(next(c.content for c in node.codeboxes))
-        # except Exception as e:
-        #     print(e)
-        #     continue
-
-
-
-
-
-
-
-
-
-
-
-
-        # node = ct.create_node(title.title())
-        # node.make_file_link(filepath, 'Text')
-        # node.update_insert_codebox(metadata)
-        # shutil.move(str(source_filepath), str(target_filepath))
-        # ct.save()
-
-
-
-# @property
-#     def text_filepath(self):
-#         filepath = None
-#         codebox = self.codebox
-#         if codebox and hasattr(codebox, 'filepath'):
-#             filepath = codebox.filepath
-#         else:
-#             filepath = next((l.filepath for l in self.links if l.filepath), None)
-#         return filepath
-#
-# def __attrs_post_init__(self):
-#         yaml = YAML()
-#         if len(self.data) > 0:
-#             if type(self.data) is str:
-#                 self.data = yaml.load(self.data)
-#         else:
-#             self.data = yaml.load(self.codebox.text)
-#
-#     def __str__(self):
-#
-#         stream = StringIO()
-#         yaml.dump(self.codebox.text, stream)
-#         stream.seek(0)
-#         return stream.read()
-#
-#     def __getattr__(self, att):
-#         return self.codebox.get(att, None)
-# yaml=YAML()
-# p = inflect.engine()
-# # nlp = spacy.load('en_core_web_sm')
-#
-
-
-# def update_document_index(index_file = 'document_index.ctd', include_content=False):
-#     index_path = Path(index_file)
-#     if not index_path.exists():
-#         print(f'{Index_file} not found')
-#         return False
-#     elif not index_path.suffix == '.ctd':
-#         print(f'{Index_file} not xml format')
-#         return False
-#
-#
-#     # ct = CherryTree(index_file)
-#
-#     for text in sys.stdin.readlines():
-#         print(text)
-#         print('===========')
-        # node = ct.find_node_by_text(document.identifier)
-        # file_link = Link(None, document.filepath, 'Text')
-        # metadata = CodeBox(None, document.metadata)
-        # if node:
-        #     node
-        #
-        #     node = Node(None, links=file_link, codeboxes=metadata)
-        # try:
-        #     node_data = YAMLDocument(next(c.content for c in node.codeboxes))
-        # except Exception as e:
-        #     print(e)
-        #     continue
-
-
-
-
-
-
-
-
-
-
-
-
-        # node = ct.create_node(title.title())
-        # node.make_file_link(filepath, 'Text')
-        # node.update_insert_codebox(metadata)
-        # shutil.move(str(source_filepath), str(target_filepath))
-        # ct.save()

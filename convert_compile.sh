@@ -1,8 +1,11 @@
-tmpdir=$(mktemp -d)
+# tmpdir=$(mktemp -d)
+tmpdir=interfiles
 i=1000
 while IFS= read rkey
 do
-  i=$((i+10))
+  echo $rkey
+  echo $(redis-cli hgetall $rkey)
+  i=$(($i+10))
   outputfile=$tmpdir/inter_$i.md
   defaults=$(redis-cli hget $rkey defaults)
   if [ $(redis-cli hexists $rkey filepath) ]
@@ -13,10 +16,10 @@ do
     text=$(redis-cli hget $rkey text)
     echo $text > $filepath
   fi
-  pandoc -o $outputfile $filepath
+  echo pandoc --defaults=$defaults --output=$outputfile $filepath
 done
 
 
-pandoc -o output/test_compile.docx $tmpdir/inter_*.md
+# pandoc --output=$2 $tmpdir/inter_*.md
 
-rm -rf $tmpdir
+# rm -rf $tmpdir

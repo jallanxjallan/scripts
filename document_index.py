@@ -19,6 +19,7 @@ sys.path.append('/home/jeremy/Library')
 
 from storage.cherrytree_xml import CherryTree
 from document.md_document import read_file
+from utility.helpers import snake_case, title_case
 
 @attr.s
 class Document():
@@ -27,10 +28,11 @@ class Document():
     filepath = attr.ib()
 
 class DocumentIndex():
-    def __init__(self, index_file=None, base_node=None):
+    def __init__(self, index_file=None, base_node=None, text_dir=None):
         print('index', index_file)
         self.index_file = index_file
         self.base_node = base_node
+        self.text_dir = text_dir
         try:
             self.ct = CherryTree(index_file)
         except Exception as e:
@@ -92,7 +94,7 @@ class DocumentIndex():
         node = self.ct.insert_node(title, parent=base_node)
         anchor = node.insert_anchor(name=document.identifier)
         link = node.insert_link(href=str(fp), text="File", sibling=anchor)
-        new_line = node.insert_text('\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n')
+        new_line = node.insert_text(f'\n{"~" * 30}\n')
         return fp
 
     def add_from_filelist(self, filelist):
@@ -124,7 +126,9 @@ class DocumentIndex():
         if not node:
             return f'Cannot find node {node_name}'
 
-        filepath = input('Filepath: ')
+        fp = Path(self.text_dir, node.name.replace(' ', "-").lower()).with_suffix('.md')
+
+        filepath = input(f'Filepath: {str(fp)}') or str(fp)
         fp = Path(filepath)
         if not fp.exists():
             return (f'{str(filepath)} does not exist')
@@ -138,15 +142,26 @@ class DocumentIndex():
         return f'Link to {filepath} added to {node.name}'
 
 
-    def export_to_file(self, node_name, target_dir):
-        target_path = Path(target_dir)
+    def export_to_file(self):
+        node_name = input('Node Name: ')
         node = self.ct.find_node_by_name(node_name)
 
         if not node:
             return f'Cannot find node {node_name}'
 
+
+        target_dir = input('Target Directory: ')
+        td = Path(target_dir)
+        if not td.exists():
+            return (f'{target_dir} does not exist')
+        fp = Path(self.text_dir, snake_case(node.name)).with_suffix('.md')
+
+        filepath = input(f'Filepath: {str(fp)}') or str(fp)
+        fp = Path(filepath)
+
+
         identifier = uuid4().hex[:8]
-        outputfile = target_path.joinpath(node_name.replace(' ', '_').lower()).with_suffix('.md')
+        outputfile = td.joinpath(node_name.replace(' ', '_').lower()).with_suffix('.md')
         if outputfile.exists():
             print(f'{str(outputfile)} already exists')
         outputfile=str(outputfile)

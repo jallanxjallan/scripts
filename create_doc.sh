@@ -1,10 +1,13 @@
 
-filepath=$1
+read -p 'Title: ' title
+read -p 'Folder ' doc_dir
+
+filename=$(echo $title | sed 's/ /_/g' | sed -e 's/\(.*\)/\L\1/')
+filepath=$doc_dir/$filename".md"
 
 if test -f $filepath; then
   echo "$filepath already exists"
 else
-  title=$(basename $filepath | sed s/\.md//g | sed 's/_/ /g' | sed -e "s/\b\(.\)/\u\1/g")
   pandoc -d create_document \
   -M title="$title" \
   -f markdown \

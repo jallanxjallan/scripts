@@ -64,16 +64,16 @@ class Updater():
             document = load_document(filepath)
             if not document:
                 continue
-            if self.di.find_entry_by_identifier(document.identifier):
+            node = self.di.find_entry_by_identifier(document.identifier)
+            if node and node.filelink:
                 continue
-            node = self.di.find_entry_by_name(document.title)
-            if not node:
+            elif node:
+                node.insert_link(filepath, text="Content")
+                print(f'{filepath} added to {node.name}')
+                added=True
+            else:
                 print('Cannot find node matching', document.title)
-                continue
-            rs = self.di.insert_document_link(node, document)
-            if rs:
-                added = True
-                print(f'linked {node.name} to {filepath}')
+
         if added:
             self.di.save_index()
         return True

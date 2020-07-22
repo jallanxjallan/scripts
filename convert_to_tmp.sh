@@ -1,7 +1,10 @@
 tmpdir=$(mktemp -d)
-no=100
-while IFS= read line; do
-    pandoc -d $1 -o $tmpdir/$no.md $line
-    no=$((no+10))
+
+while IFS= read fullpath; do
+  filename=$(basename -- "$fullfile")
+  stem="${filename%.*}"
+  outputfile=$tmpdir/$stem.md
+  pandoc -o $outputfile $fullpath
+  echo $outputfile
 done
 echo $tmpdir

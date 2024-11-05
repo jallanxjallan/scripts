@@ -44,7 +44,7 @@ class ContentGen():
 	def __attrs_post_init__(self):
 		# Set namespace based on context if available, or use "general"
 		context = getattr(self, 'context', 'general')
-		self.namespace = f"{context}_{rand_string()}"
+		self.namespace = f"{context}.{rand_string()}"
 		self.counter = self.redis_key('counter')
 		self.counter.set(0)
 		self.process_index = self.redis_key('process', 'index')

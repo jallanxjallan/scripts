@@ -6,9 +6,52 @@
 #  Copyright 2019 Jeremy Allan <jeremy@jeremyallan.com>
 
 import attr
+from attr import define, field
 import yaml
-from oaiv2 import ContentGen, Processor, DataStore, Writer
+import atexit
+import pyperclip
+from oaiv2 import Processor, DataStore, Writer, trap_input_error
+from document import Document
+from utility import rand_string
+
 import fire
+
+@define
+class ContentGen():
+	"""Base class with the namespace attribute and post-init processing."""
+	prompt: str = field(init=False, default=None)
+	namespace: str = field(init=False, default=None)
+	counter: str = field(init=False, default=None)
+	process_index: object = field(init=False, default=None)
+	job: str = field(init=False, default=None)
+
+	def __attrs_post_init__(self):
+		# Set namespace based on context if available, or use "general"
+		context = getattr(self, 'context', 'general')
+		self.namespace = f"{context}.{rand_string()}"
+		self.counter = self.redis_key('counter')
+		self.counter.set(0)
+		self.process_index = self.redis_key('process', 'index')
+		# set expire for all keys in namespace
+		atexit.register(self.set_expiry) 
+
+	@trap_input_error
+	def document(self, filepath):
+		doc = Document.read_file(filepath)
+		self.prompt = doc.content
+		self.redis_key('metadata').hset(mapping=doc.metadata)
+		self.redis_key('source').set(str(doc.filepath))
+		self.job = doc.filepath.stem
+		return self 
+	
+	@trap_input_error
+	def cliptext(self): 
+		self.prompt = pyperclip.paste() 
+		if len(self.prompt) < 25:
+			raise ValueError(f'{self.prompt} too short')
+		self.redis_key('source').set('clipping')
+		self.job = 'clipping'
+		return self
 
 
 # CLI entry point using Fire

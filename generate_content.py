@@ -7,6 +7,7 @@
 
 import attr
 from attr import define, field
+from pathlib import Path
 import yaml
 import atexit
 import pyperclip
@@ -40,10 +41,16 @@ class ContentGen():
 		doc = Document.read_file(filepath)
 		self.prompt = doc.content
 		self.redis_key('metadata').hset(mapping=doc.metadata)
-		self.redis_key('source').set(str(doc.filepath))
 		self.job = doc.filepath.stem
 		return self 
-	
+
+	@trap_input_error 
+	def filepath(self, filepath):
+		doc = Document.read_file(filepath)
+		self.prompt = doc.content
+		self.redis_key('metadata').hset('source', doc.inputfile)
+		self.job = doc.filepath.stem
+
 	@trap_input_error
 	def cliptext(self): 
 		self.prompt = pyperclip.paste() 
@@ -51,7 +58,11 @@ class ContentGen():
 			raise ValueError(f'{self.prompt} too short')
 		self.redis_key('source').set('clipping')
 		self.job = 'clipping'
-		return self
+		return self 
+	
+	@trap_input_error 
+	def audio(self, filepath):
+		pass
 
 
 # CLI entry point using Fire

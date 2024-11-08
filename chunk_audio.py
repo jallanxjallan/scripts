@@ -8,10 +8,13 @@
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
 from math import ceil
-from utility import staging_file
+from pathlib import Path
+from utility import staging_dir
 import fire
 
 def chunk_audio(media_filepath, max_chunk_length=1000000):
+    mfp = Path(media_filepath)
+    output_dir = staging_dir(prefix=mfp.stem)
     audio = AudioSegment.from_file(media_filepath)
     audio_length = len(audio)
     chunk_length = ceil(audio_length / ceil(audio_length/max_chunk_length))

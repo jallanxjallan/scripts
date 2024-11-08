@@ -8,6 +8,7 @@
 import sys
 from attrs import define, field
 from pathlib import Path
+from urllib.parse import urlparse
 import regex
 import pyperclip
 from script_lib import initialize_class
@@ -31,7 +32,8 @@ class Linker():
 		[l.unlink() for l in edit_path.iterdir() if l.is_symlink] 
 		
 		for i, match in enumerate(pattern.finditer(context)):
-			target_filepath = Path(match['filepath']).resolve()
+			target_filepath = Path(urlparse(match['filepath']).path).resolve()
+			
 			if not target_filepath.exists():
 				print(f'filepath for {match["label"]} {match["filepath"]} not found')
 				continue

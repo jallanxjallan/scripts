@@ -14,12 +14,12 @@ import fire
 
 def chunk_audio(media_filepath, max_chunk_length=1000000):
     mfp = Path(media_filepath)
-    output_dir = staging_dir(prefix=mfp.stem)
+    output_dir = staging_dir(prefix=f'{mfp.stem}qq')
     audio = AudioSegment.from_file(media_filepath)
     audio_length = len(audio)
     chunk_length = ceil(audio_length / ceil(audio_length/max_chunk_length))
-    for audio_chunk in audio[::chunk_length]:
-        chunk_filepath = staging_file(prefix='audio', suffix='.mp3')
+    for i, audio_chunk in enumerate(audio[::chunk_length]):
+        chunk_filepath = output_dir.joinpath(f'chunk_{i:03}').with_suffix('.mp3')
         audio_chunk.export(chunk_filepath, format='mp3')
         print(chunk_filepath)
 
@@ -66,7 +66,6 @@ def chunk_on_silence(media_filepath, min_silence_len=1000, silence_thresh=-40):
         yield chunk_filepath
 
 if __name__ == '__main__':
-    print('running chunking')
     fire.Fire(chunk_audio)
        
     

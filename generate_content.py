@@ -25,6 +25,7 @@ class ContentGen():
 	counter: str = field(init=False, default=None)
 	process_index: object = field(init=False, default=None)
 	job: str = field(init=False, default=None)
+	audiofile: Path = field(init=False, default=None)
 
 	def __attrs_post_init__(self):
 		# Set namespace based on context if available, or use "general"
@@ -41,15 +42,9 @@ class ContentGen():
 		doc = Document.read_file(filepath)
 		self.prompt = doc.content
 		self.redis_key('metadata').hset(mapping=doc.metadata)
-		self.job = doc.filepath.stem
+		inputfile = doc.metadata.get('inputfile', None)
+		self.job = Path(inputfile).stem if inputfile else doc.filepath.stem
 		return self 
-
-	@trap_input_error 
-	def filepath(self, filepath):
-		doc = Document.read_file(filepath)
-		self.prompt = doc.content
-		self.redis_key('metadata').hset('source', doc.inputfile)
-		self.job = doc.filepath.stem
 
 	@trap_input_error
 	def cliptext(self): 
@@ -62,7 +57,15 @@ class ContentGen():
 	
 	@trap_input_error 
 	def audio(self, filepath):
-		pass
+		fp = Path(filepath) 
+		source = fp.parts[-2]
+		self.audiofile = fp
+		self.job = fp.parts[-2].split('qq')[0] 
+		self.redis_key('metadata').hset(
+			mapping=dict(
+				source=source,
+				chunk=filepath))
+		return self
 
 
 # CLI entry point using Fire
@@ -82,3 +85,5 @@ if __name__ == "__main__":
 	
 	# Instantiate the class and expose its methods to Fire CLI
 	fire.Fire(DynamicClass)
+
+

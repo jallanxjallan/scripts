@@ -157,8 +157,8 @@ class ContentAnalyse():
 	def load_config_data(cls):
 		field_names = [f.name for f in fields(ContentAnalyse)]
 		config_values = load_config()
-		config_values['dfd'] = load_docs(Path(config_values['story_dir']))
-		config_values['dfi'] = load_index(config_values['index_file'])
+		config_values['dfd'] = load_docs(Path(config_values.get('story_dir', 'stories')))
+		config_values['dfi'] = load_index(config_values.get('index_file', 'content_index.md'))
 		return cls(**{k:v for k,v in config_values.items() if k in field_names})
 	
 	def content_summary(self, group=False):

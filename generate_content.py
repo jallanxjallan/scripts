@@ -14,6 +14,7 @@ import pyperclip
 from oaiv2 import Processor, DataStore, Writer, trap_input_error
 from document import Document
 from utility import rand_string
+from oaiv2.constants import *
 
 import fire
 
@@ -28,12 +29,9 @@ class ContentGen():
 	audiofile: Path = field(init=False, default=None)
 
 	def __attrs_post_init__(self):
-		# Set namespace based on context if available, or use "general"
-		context = getattr(self, 'context', 'general')
-		self.namespace = f"{context}.{rand_string()}"
-		self.counter = self.redis_key('counter')
-		self.counter.set(0)
-		self.process_index = self.redis_key('process', 'index')
+		# Set namespace based on projet if available, or use a three letter random string
+		(project := getattr(self, PROJECT, None)) if not None else rand_string()
+		self.namespace = f'{project}.{rand_string()}'
 		# set expire for all keys in namespace
 		atexit.register(self.set_expiry) 
 
@@ -41,8 +39,9 @@ class ContentGen():
 	def document(self, filepath):
 		doc = Document.read_file(filepath)
 		self.prompt = doc.content
-		self.redis_key('metadata').hset(mapping=doc.metadata)
-		inputfile = doc.metadata.get('inputfile', None)
+		self.redis_key(METADATA).hset(mapping=doc.metadata)
+		self.redis_key(SOURCE).set(doc.filepath.stem)
+		inputfile = doc.metadata.get(INPUTFILE, None)
 		self.job = Path(inputfile).stem if inputfile else doc.filepath.stem
 		return self 
 
@@ -51,20 +50,16 @@ class ContentGen():
 		self.prompt = pyperclip.paste() 
 		if len(self.prompt) < 25:
 			raise ValueError(f'{self.prompt} too short')
-		self.redis_key('source').set('clipping')
-		self.job = 'clipping'
+		self.redis_key(SOURCE).set(CLIPPING)
+		self.job = CLIPPING
 		return self 
 	
 	@trap_input_error 
 	def audio(self, filepath):
 		fp = Path(filepath) 
-		source = fp.parts[-2]
 		self.audiofile = fp
-		self.job = fp.parts[-2].split('qq')[0] 
-		self.redis_key('metadata').hset(
-			mapping=dict(
-				source=source,
-				chunk=filepath))
+		self.job = fp.parts[-2].split(DELIMITER)[0] 
+		self.redis_key(METADATA).hset(SOURCE, fp.parts[-2])
 		return self
 
 

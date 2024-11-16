@@ -79,7 +79,6 @@ def load_notes_output_file(file_path):
 	return hierarchy, parent_chains
 
 def upload_instructions(filepath):
-	print(filepath)
 	if not (fp := Path(filepath)).exists():
 		raise FileNotFoundError
 	

@@ -72,6 +72,9 @@ class ContentGen(DataStore, Processor, Writer):
 		return self
 
 
+	def display(self, att):
+		print(getattr(self, att))
+
 # CLI entry point using Fire
 if __name__ == "__main__":
 	config = load_config()
